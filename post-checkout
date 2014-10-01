@@ -25,8 +25,8 @@ if ARGV[2] == '1'
     ERB.new(str).result
   end
 
-  def dump(env, branch_name)
-    print "Saving state of #{env} database on '#{branch_name}' branch..."
+  def dump(path, env, branch_name)
+    print "Saving state of #{env} database on '#{branch_name}' branch for path #{path}..."
 
     if system(dump_cmd(env, branch_name))
       print "done!\n"
@@ -118,6 +118,31 @@ if ARGV[2] == '1'
     `git show-ref --heads | grep #{ref} | awk '{print $2}'`.split("\n").map{ |b| b.sub(/^refs\/heads\//, '') }
   end
 
+  def dump_and_restore(path)
+    # Load Rails DB config and grab database name
+    @rails_db_config = YAML.load_file("#{@project_root}/#{path}")
+    dev_database_name = erb_result(@rails_db_config['development']['database'])
+    test_database_name = erb_result(@rails_db_config['test']['database'])
+
+    # Don't do anything if the source and destination branches are the same or nonexistent
+    unless @source_branches.include?(@destination_branch) || @source_branches.empty? || (@source_branches | [@destination_branch]).any?{ |b| b == '' }
+      # Dump database for source branches
+      all_dumped = @source_branches.all? { |branch|
+        dump(path, 'development', branch) && dump(path, 'test', branch)
+      }
+
+      if all_dumped
+        # Restore dump from this branch, if it exists
+        dump_dev_path = "#{@dump_folder}/#{dev_database_name}-#{@destination_branch}"
+        dump_test_path = "#{@dump_folder}/#{test_database_name}-#{@destination_branch}"
+        restore_from_dump('development', dump_dev_path)
+        restore_from_dump('test', dump_test_path)
+      else
+        print "Failed to dump database. Halting.\n"
+      end
+    end
+  end
+
   def restore_from_dump(env, dump_path)
     if File.exists?(dump_path)
       print "Restoring #{env} database to its previous state on this branch..."
@@ -145,31 +170,15 @@ if ARGV[2] == '1'
   @project_root = %x[git rev-parse --show-toplevel].strip
   @dump_folder = "#{@project_root}/.db_branch_dumps"
 
-  # Load Rails DB config and grab database name
-  @rails_db_config = YAML.load_file("#{@project_root}/config/database.yml")
-  dev_database_name = erb_result(@rails_db_config['development']['database'])
-  test_database_name = erb_result(@rails_db_config['test']['database'])
-
   # Ensure dump directory exists
   unless Dir.exists?(@dump_folder)
     Dir.mkdir @dump_folder
   end
 
-  # Don't do anything if the source and destination branches are the same or nonexistent
-  unless @source_branches.include?(@destination_branch) || @source_branches.empty? || (@source_branches | [@destination_branch]).any?{ |b| b == '' }
-    # Dump database for source branches
-    all_dumped = @source_branches.all? { |branch|
-      dump('development', branch) && dump('test', branch)
-    }
-
-    if all_dumped
-      # Restore dump from this branch, if it exists
-      dump_dev_path = "#{@dump_folder}/#{dev_database_name}-#{@destination_branch}"
-      dump_test_path = "#{@dump_folder}/#{test_database_name}-#{@destination_branch}"
-      restore_from_dump('development', dump_dev_path)
-      restore_from_dump('test', dump_test_path)
-    else
-      print "Failed to dump database. Halting.\n"
-    end
+  # gather all non-test database.yml files in project
+  @database_yamls = `git ls-files */database.yml | grep -v /test/`.split
+  @database_yamls.each do |yaml_path|
+    dump_and_restore(yaml_path)
   end
+
 end
