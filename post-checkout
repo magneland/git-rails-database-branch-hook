@@ -17,6 +17,11 @@ class UnsupportedDatabaseAdapter < RuntimeError
 
 end
 
+# turns on debug output if GIT_TRACE env var is set
+def debug(str)
+  print str if ENV['GIT_TRACE'] && ENV['GIT_TRACE'] =~ /^1|2|true$/i
+end
+
 # If this was a branch checkout
 if ARGV[2] == '1'
 
@@ -26,13 +31,13 @@ if ARGV[2] == '1'
   end
 
   def dump(path, env, branch_name)
-    print "Saving state of #{env} database on '#{branch_name}' branch for path #{path}..."
+    debug "Saving state of #{env} database on '#{branch_name}' branch for path #{path}..."
 
     if system(dump_cmd(env, branch_name))
-      print "done!\n"
+      debug "done!\n"
       true
     else
-      print "failed!\n"
+      debug "failed!\n"
       false
     end
   rescue UnsupportedDatabaseAdapter => e
@@ -62,8 +67,8 @@ if ARGV[2] == '1'
     database_name = erb_result(@rails_db_config[env]['database'])
     username = erb_result(@rails_db_config[env]['username'])
     password = @rails_db_config[env]['password']
-
-    %[mysqldump --add-drop-database --user=#{username} --password="#{password}" --databases #{database_name} > "#{@dump_folder}/#{database_name}-#{branch_name}"]
+    # silences "Warning: Using a password on the command line interface can be insecure."
+    %[mysqldump --add-drop-database --user=#{username} --password="#{password}" --databases #{database_name} > "#{@dump_folder}/#{database_name}-#{branch_name}" 2> /dev/null]
   end
 
   def restore(env, path)
@@ -110,8 +115,8 @@ if ARGV[2] == '1'
     database_name = erb_result(@rails_db_config[env]['database'])
     username = erb_result(@rails_db_config[env]['username'])
     password = @rails_db_config[env]['password']
-
-    %[mysql -u #{username} --password="#{password}" #{database_name} < "#{path}"]
+    # silences "Warning: Using a password on the command line interface can be insecure."
+    %[mysql -u #{username} --password="#{password}" #{database_name} < "#{path}" 2> /dev/null]
   end
 
   def branches_from_refhead(ref)
@@ -138,24 +143,24 @@ if ARGV[2] == '1'
         restore_from_dump('development', dump_dev_path)
         restore_from_dump('test', dump_test_path)
       else
-        print "Failed to dump database. Halting.\n"
+        debug "Failed to dump database. Halting.\n"
       end
     end
   end
 
   def restore_from_dump(env, dump_path)
     if File.exists?(dump_path)
-      print "Restoring #{env} database to its previous state on this branch..."
+      debug "Restoring #{env} database to its previous state on this branch..."
 
       if restore(env, dump_path)
-        print "done!\n"
+        debug "done!\n"
       else
-        print "failed!\n"
+        debug "failed!\n"
       end
     else
-      print "No DB dump for #{env} database on the '#{@destination_branch}' branch was found!\n"
-      print "The state of your database has been saved for when you return to the '#{@source_branches.join('\' or \'')}' branch, but its current state has been left unchanged.\n"
-      print "You are now free to make changes to it that are specific to this branch, and they will be saved when you checkout a different branch, then restored when you checkout this one again.\n"
+      debug "No DB dump for #{env} database on the '#{@destination_branch}' branch was found!\n"
+      debug "The state of your database has been saved for when you return to the '#{@source_branches.join('\' or \'')}' branch, but its current state has been left unchanged.\n"
+      debug "You are now free to make changes to it that are specific to this branch, and they will be saved when you checkout a different branch, then restored when you checkout this one again.\n"
     end
   end
 
