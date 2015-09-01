@@ -13,9 +13,9 @@ Alternatively, you can clone this repository to your computer then symlink the `
 
 ## Global Installation
 
-Download the `post-checkout` file into the `.git_template/hooks` directory of your home directory. Be sure to keep the `post-checkout` name to match Git's expectations.
+Download the `post-checkout` file into the `.git_templates/hooks` directory of your home directory. Be sure to keep the `post-checkout` name to match Git's expectations.
 
-Alternatively, you can clone this repository to your computer then symlink the `post-checkout` file into the `.git_template/hooks` directory of your home directory. This allows you to manage the file in one place and be able to easily pull down updates.
+Alternatively, you can clone this repository to your computer then symlink the `post-checkout` file into the `.git_templates/hooks` directory of your home directory. This allows you to manage the file in one place and be able to easily pull down updates.
 
 For each of your projects, call: `git init`
 
